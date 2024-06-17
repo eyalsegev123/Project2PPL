@@ -1,10 +1,10 @@
 // ===========================================================
 // AST type models
 import { map, zipWith } from "ramda";
-import { makeEmptySExp, makeSymbolSExp, SExpValue, makeCompoundSExp, valueToString } from './L3-value'
+import { makeEmptySExp, makeSymbolSExp, SExpValue, makeCompoundSExp, valueToString, makeClosure } from './L3-value'
 import { first, second, rest, allT, isEmpty, isNonEmptyList, List } from "../shared/list";
 import { isArray, isString, isNumericString, isIdentifier } from "../shared/type-predicates";
-import { Result, makeOk, makeFailure, bind, mapResult, mapv } from "../shared/result";
+import { Result, makeOk, makeFailure, bind, mapResult, mapv, isOk } from "../shared/result";
 import { parse as p, isSexpString, isToken, isCompoundSexp } from "../shared/parser";
 import { Sexp, Token } from "s-expression";
 
@@ -29,7 +29,7 @@ import { Sexp, Token } from "s-expression";
 ;;         |  <boolean>                     / BoolExp(val:boolean)
 ;;         |  <string>                      / StrExp(val:string)
 ;;         |  ( lambda ( <var>* ) <cexp>+ ) / ProcExp(args:VarDecl[], body:CExp[]))
-;;         | ( class ( <var>+ ) ( <binding>+ ) )
+;;         |  ( class ( <var>+ ) ( <binding>+ ) )
 ;;                    / ClassExp(fields:VarDecl[], methods:Binding[]))
 ;;         |  ( if <cexp> <cexp> <cexp> )   / IfExp(test: CExp, then: CExp, alt: CExp)
 ;;         |  ( let ( binding* ) <cexp>+ )  / LetExp(bindings:Binding[], body:CExp[]))
@@ -251,16 +251,15 @@ const parseClassExp = (fields: Sexp, bindings: Sexp): Result<ClassExp> => {
     if (!isArray(fields) || !allT(isString, fields)) {
         return makeFailure(`Invalid fields for ClassExp: ${format(fields)}`);
     }
-    if (!isGoodBindings(bindings)) {
-        return makeFailure(`Invalid bindings for ClassExp: ${format(bindings)}`);
+    if (!isGoodBindings(bindings[0])) {
+        return makeFailure(`Invalid bindings for ClassExp: ${format(bindings[0])}`);
     }
-    const methodsName = map(b => b[0], bindings);
-    const parsedFields: VarDecl[] = fields.map(makeVarDecl);
-    const valsResult = mapResult(parseL3CExp, map(second, bindings));
-    const bindingsResult = mapv(valsResult, (vals: CExp[]) => zipWith(makeBinding, methodsName, vals));
-    return bind(bindingsResult, (parsedBindings: Binding[]) =>
-        makeOk(makeClassExp(parsedFields, parsedBindings)));
-}
+    const parsedFields : VarDecl[] = map(makeVarDecl , fields);
+    const methodsNames = map(b => b[0], bindings[0]);
+    const methodResults = mapResult(parseL3CExp, map(second,bindings[0]));
+    const bindingsResult : Result<Binding[]> = bind(methodResults, (vals: CExp[]) => makeOk(zipWith(makeBinding, methodsNames, vals)));
+    return mapv(bindingsResult,(parsedBindings : Binding[]) => makeClassExp(parsedFields,parsedBindings));
+};
 
 
 
@@ -334,10 +333,8 @@ const unparseProcExp = (pe: ProcExp): string =>
 const unparseLetExp = (le: LetExp) : string => 
     `(let (${map((b: Binding) => `(${b.var.var} ${unparseL3(b.val)})`, le.bindings).join(" ")}) ${unparseLExps(le.body)})`
 
-const unparseClassExp = (ce: ClassExp) : string => 
-    `(class (${map((b: VarDecl) => b.var, ce.fields).join(" ")}) ${map((b: Binding) => `(${b.var.var} ${unparseL3(b.val)})`, ce.methods).join(" ")})`
-
-
+const unparseClassExp = (ce: ClassExp): string => 
+    `(class (${map((b: VarDecl) => b.var, ce.fields).join(" ")}) (${map((b: Binding) => `(${b.var.var} ${unparseL3(b.val)})`, ce.methods).join(" ")}))`
 
 
 export const unparseL3 = (exp: Program | Exp): string =>
