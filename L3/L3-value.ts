@@ -30,9 +30,14 @@ export const makeClosureEnv = (params: VarDecl[], body: CExp[], env: Env): Closu
 export const makeClass = (fields: VarDecl[], methods: Binding[]): Class =>
     ({tag: "Class", fields: fields, methodsVal: methods, env : makeEmptyEnv()});
 
-export const makeObject = (methods : Binding[]) : Object =>
-    ({tag: "Object", methodsVal: methods});
+export const makeClassEnv = (fields: VarDecl[], methods: Binding[] , env : Env): Class =>
+    ({tag: "Class", fields: fields, methodsVal: methods, env : env});
 
+export const makeObject = (methods : Binding[]) : Object =>
+    ({tag: "Object", methodsVal: methods , env : makeEmptyEnv()});
+
+export const makeObjectEnv = (methods : Binding[], env : Env) : Object =>
+    ({tag: "Object", methodsVal: methods , env : env});
 
 
 
@@ -56,11 +61,14 @@ export type Class = {
     methodsVal: Binding[];
     env: Env;
 }
-
 export type Object = {
     tag : "Object";
     methodsVal : Binding[];
+    env : Env;
 }
+
+
+
 
 export type SExpValue = number | boolean | string | PrimOp | Closure | SymbolSExp | EmptySExp | CompoundSExp | Class | Object;
 export const isSExp = (x: any): x is SExpValue =>

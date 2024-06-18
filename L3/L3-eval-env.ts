@@ -1,18 +1,21 @@
 // L3-eval.ts
 // Evaluator with Environments model
 
-import { map } from "ramda";
+import { map , zipWith } from "ramda";
 import { isBoolExp, isCExp, isLitExp, isNumExp, isPrimOp, isStrExp, isVarRef,
          isAppExp, isDefineExp, isIfExp, isLetExp, isProcExp,
          Binding, VarDecl, CExp, Exp, IfExp, LetExp, ProcExp, Program,
-         parseL3Exp,  DefineExp} from "./L3-ast";
+         parseL3Exp,  DefineExp , ClassExp,
+         isClassExp, makeBinding} from "./L3-ast";
 import { applyEnv, makeEmptyEnv, makeExtEnv, Env } from "./L3-env-env";
-import { isClosure, makeClosureEnv, Closure, Value } from "./L3-value";
+import { isClosure, makeClosureEnv, Closure, Value, Class , Object , isClass , isObject , makeClassEnv, makeObjectEnv, makeClass, valueToString} from "./L3-value";
 import { applyPrimitive } from "./evalPrimitive";
 import { allT, first, rest, isEmpty, isNonEmptyList } from "../shared/list";
 import { Result, makeOk, makeFailure, bind, mapResult } from "../shared/result";
 import { parse as p } from "../shared/parser";
 import { format } from "../shared/format";
+import { substitute } from "./substitute";
+
 
 // ========================================================
 // Eval functions
@@ -33,6 +36,7 @@ const applicativeEval = (exp: CExp, env: Env): Result<Value> =>
                            applicativeEval(rand, env), exp.rands),
                               (args: Value[]) =>
                                  applyProcedure(proc, args))) :
+    isClassExp(exp) ? evalClassEnv(exp, env) :
     makeFailure('"let" not supported (yet)');
 
 export const isTrueValue = (x: Value): boolean =>
@@ -51,12 +55,37 @@ const evalProc = (exp: ProcExp, env: Env): Result<Closure> =>
 const applyProcedure = (proc: Value, args: Value[]): Result<Value> =>
     isPrimOp(proc) ? applyPrimitive(proc, args) :
     isClosure(proc) ? applyClosure(proc, args) :
+    isClass(proc) ? applyClassEnv(proc, args) :
+    isObject(proc) ? applyObjectEnv(proc,args) :
     makeFailure(`Bad procedure ${format(proc)}`);
 
 const applyClosure = (proc: Closure, args: Value[]): Result<Value> => {
     const vars = map((v: VarDecl) => v.var, proc.params);
     return evalSequence(proc.body, makeExtEnv(vars, args, proc.env));
 }
+
+const applyClassEnv = (proc: Class, args: Value[]): Result<Value> =>{
+    const vars = map((v: VarDecl) => v.var, proc.fields);
+    return makeOk(makeObjectEnv(proc.methodsVal , makeExtEnv(vars, args, proc.env)));
+}
+
+
+const applyObjectEnv = (proc: Object, args: Value[]): Result<Value> => {
+    if(args.length === 0)
+        return makeFailure("invalid args");
+    const procMethodsFilterByName = proc.methodsVal.filter(method => method.var.var === valueToString(args[0]), proc.methodsVal);
+    if(procMethodsFilterByName.length === 0)
+        return makeFailure("Unrecognized method: " + valueToString(args[0]));
+    const operands = args.filter(operand => operand !== args[0], args);
+    return isProcExp(procMethodsFilterByName[0].val) ? 
+    applyClosure(makeClosureEnv(procMethodsFilterByName[0].val.args , procMethodsFilterByName[0].val.body , proc.env) , operands) :
+    makeFailure("Not a ProcExp");
+
+}
+
+const evalClassEnv = (exp: ClassExp, env: Env): Result<Class> => 
+    makeOk(makeClassEnv(exp.fields,exp.methods,env))
+ 
 
 // Evaluate a sequence of expressions (in a program)
 export const evalSequence = (seq: Exp[], env: Env): Result<Value> =>
