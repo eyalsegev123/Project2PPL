@@ -9,8 +9,6 @@ Signature: class2proc(classExp)
 Type: ClassExp => ProcExp
 */
 export const class2proc = (exp: ClassExp): ProcExp =>{
-    
-    
     const ifExps = exp.methods.reduceRight((acc : CExp, b) =>
         makeIfExp(makeAppExp(makePrimOp("eq?"), [makeVarRef("msg"), makePrimOp("'" + b.var.var)]), makeAppExp(b.val,[]), acc)
         , makeBoolExp(false));
@@ -29,31 +27,31 @@ Type: [Exp | Program] => Result<Exp | Program>
 */
 
 export const lexTransform = (exp: Exp | Program): Result<Exp | Program> =>
-    makeOk(rewriteAllClasses(exp));
+    makeOk(transformClass(exp));
 
 
-export const rewriteAllClasses = (exp:Program | Exp) : Program | Exp =>  
-    isExp(exp) ? rewriteAllClassExp(exp) :
-    isProgram(exp) ? makeProgram(map(rewriteAllClassExp, exp.exps)) :
+export const transformClass = (exp:Program | Exp) : Program | Exp =>  
+    isExp(exp) ? transformClassExp(exp) :
+    isProgram(exp) ? makeProgram(map(transformClassExp, exp.exps)) :
     exp;
 
-export const rewriteAllClassExp = (exp : Exp) : Exp =>
-    isCExp(exp) ? rewriteAllClassCexp(exp) :
-    isDefineExp(exp) ? makeDefineExp(exp.var,rewriteAllClassCexp(exp.val)):
+export const transformClassExp = (exp : Exp) : Exp =>
+    isCExp(exp) ? transformClassCExp(exp) :
+    isDefineExp(exp) ? makeDefineExp(exp.var,transformClassCExp(exp.val)):
     exp;
 
-export const rewriteAllClassCexp = (exp:CExp) : CExp => {
+export const transformClassCExp = (exp:CExp) : CExp => {
 
     return isAtomicExp(exp) ? exp :
     isLitExp(exp) ? exp :
-    isIfExp(exp) ? makeIfExp(rewriteAllClassCexp(exp.test),
-                            rewriteAllClassCexp(exp.then),
-                            rewriteAllClassCexp(exp.alt)) :
-    isAppExp(exp) ? makeAppExp(rewriteAllClassCexp(exp.rator),
-                               map(rewriteAllClassCexp, exp.rands)) :
-    isProcExp(exp) ? makeProcExp(exp.args, map(rewriteAllClassCexp, exp.body)) :
-    isLetExp(exp) ? makeLetExp(map(b => makeBinding(b.var.var,rewriteAllClassCexp(b.val)),exp.bindings)
-                              ,map(rewriteAllClassCexp,exp.body)):
+    isIfExp(exp) ? makeIfExp(transformClassCExp(exp.test),
+                            transformClassCExp(exp.then),
+                            transformClassCExp(exp.alt)) :
+    isAppExp(exp) ? makeAppExp(transformClassCExp(exp.rator),
+                               map(transformClassCExp, exp.rands)) :
+    isProcExp(exp) ? makeProcExp(exp.args, map(transformClassCExp, exp.body)) :
+    isLetExp(exp) ? makeLetExp(map(b => makeBinding(b.var.var,transformClassCExp(b.val)),exp.bindings)
+                              ,map(transformClassCExp,exp.body)):
     isClassExp(exp) ? class2proc(exp) : 
     exp;
 }
